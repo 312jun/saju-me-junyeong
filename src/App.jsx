@@ -20,8 +20,13 @@ function getGeminiErrorMessage(raw) {
   if (raw.includes('no longer available') || raw.includes('NOT_FOUND')) {
     return '모델을 찾을 수 없습니다. 페이지를 새로고침 후 다시 시도해 주세요.'
   }
-  if (raw.includes('API key not valid') || raw.includes('API_KEY_INVALID')) {
-    return 'API 키가 올바르지 않습니다. .env 또는 Netlify 환경변수(GEMINI_API_KEY)를 확인하세요.'
+  if (raw.includes('API key not valid') || raw.includes('API_KEY_INVALID') || raw.includes('401')) {
+    return [
+      'API 인증에 실패했습니다 (401).',
+      '1) Netlify → Site settings → Environment variables',
+      '2) Key: GEMINI_API_KEY / Value: AI Studio에서 발급한 키',
+      '3) Save 후 Deploys → Trigger deploy (재배포 필수)',
+    ].join('\n')
   }
   if (raw.includes('GEMINI_API_KEY')) {
     return 'API 키가 설정되지 않았습니다. Netlify → Site settings → Environment variables에 GEMINI_API_KEY를 추가하세요.'

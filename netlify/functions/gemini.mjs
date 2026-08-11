@@ -12,7 +12,8 @@ export default async (req) => {
     const result = await callGemini(apiKey, prompt)
     return json(result)
   } catch (err) {
-    return json({ error: err.message || String(err) }, 500)
+    const status = err.statusCode === 401 ? 401 : err.statusCode === 403 ? 403 : 500
+    return json({ error: err.message || String(err) }, status)
   }
 }
 
