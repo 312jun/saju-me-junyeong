@@ -21,7 +21,10 @@ function getGeminiErrorMessage(raw) {
     return '모델을 찾을 수 없습니다. 페이지를 새로고침 후 다시 시도해 주세요.'
   }
   if (raw.includes('API key not valid') || raw.includes('API_KEY_INVALID')) {
-    return 'API 키가 올바르지 않습니다. .env 확인 후 dev 서버를 재시작하세요.'
+    return 'API 키가 올바르지 않습니다. .env 또는 Netlify 환경변수(GEMINI_API_KEY)를 확인하세요.'
+  }
+  if (raw.includes('GEMINI_API_KEY')) {
+    return 'API 키가 설정되지 않았습니다. Netlify → Site settings → Environment variables에 GEMINI_API_KEY를 추가하세요.'
   }
   return raw
 }
@@ -112,11 +115,6 @@ function App() {
       return
     }
 
-    if (!import.meta.env.DEV) {
-      setError('개발 모드에서만 API를 사용할 수 있습니다.')
-      return
-    }
-
     setLoading(true)
     setError('')
     setResult('')
@@ -153,7 +151,7 @@ return only Korean.
 `.trim()
 
     try {
-      // API 키는 Vite dev 서버(/api/gemini)에서만 사용 — 브라우저에 노출 안 함
+      // API 키는 서버에서만 사용 (로컬: Vite 프록시 / Netlify: Function)
       const res = await fetch('/api/gemini', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

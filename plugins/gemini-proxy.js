@@ -1,6 +1,4 @@
-import { GoogleGenAI } from '@google/genai'
-
-const MODELS = ['gemini-3.6-flash', 'gemini-3.5-flash-lite']
+import { callGemini } from '../shared/gemini-api.js'
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -22,7 +20,6 @@ export function geminiProxy(apiKey) {
         return
       }
 
-      const ai = new GoogleGenAI({ apiKey })
       console.log('[gemini-proxy] /api/gemini 준비됨 (키는 서버에서만 사용)')
 
       server.middlewares.use('/api/gemini', async (req, res) => {
@@ -36,30 +33,9 @@ export function geminiProxy(apiKey) {
         try {
           const raw = await readBody(req)
           const { prompt } = JSON.parse(raw)
-
-          if (!prompt) {
-            res.statusCode = 400
-            res.setHeader('Content-Type', 'application/json')
-            res.end(JSON.stringify({ error: 'prompt가 필요합니다.' }))
-            return
-          }
-
-          let lastError = null
-          for (const model of MODELS) {
-            try {
-              const interaction = await ai.interactions.create({ model, input: prompt })
-              res.setHeader('Content-Type', 'application/json')
-              res.end(JSON.stringify({ text: interaction.output_text || '', model }))
-              return
-            } catch (err) {
-              lastError = err
-              console.warn(`[gemini-proxy] ${model} 실패:`, err.message)
-            }
-          }
-
-          res.statusCode = 500
+          const result = await callGemini(apiKey, prompt)
           res.setHeader('Content-Type', 'application/json')
-          res.end(JSON.stringify({ error: lastError?.message || '모든 모델 호출 실패' }))
+          res.end(JSON.stringify(result))
         } catch (err) {
           res.statusCode = 500
           res.setHeader('Content-Type', 'application/json')
