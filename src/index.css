@@ -1,25 +1,41 @@
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
+  /* 한지 · 먹 · 인주 · 쪽빛 */
+  --text: #5a5146;
+  --text-h: #1b1612;
+  --bg: #e9e2d3;
+  --border: #c4b79d;
+  --code-bg: #f4eee3;
+  --accent: #8f2a22;
+  --accent-bg: rgba(143, 42, 34, 0.09);
+  --accent-border: rgba(143, 42, 34, 0.38);
+  --ink: #1b1612;
+  --indigo: #2f3d55;
+  --gold: #8f7340;
+  --paper: #f7f1e6;
+  --social-bg: rgba(47, 61, 85, 0.06);
   --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+    rgba(27, 22, 18, 0.08) 0 12px 24px -8px,
+    rgba(27, 22, 18, 0.04) 0 4px 8px -2px;
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
+  --sans: 'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif;
+  --heading: 'Gowun Batang', 'Noto Serif KR', serif;
   --mono: ui-monospace, Consolas, monospace;
 
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
+  font: 17px/150% var(--sans);
+  letter-spacing: 0.01em;
+  color-scheme: light;
   color: var(--text);
-  background: var(--bg);
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(ellipse 120% 80% at 50% -10%, rgba(143, 115, 64, 0.12), transparent 55%),
+    radial-gradient(ellipse 80% 50% at 100% 100%, rgba(47, 61, 85, 0.08), transparent 50%),
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(27, 22, 18, 0.015) 2px,
+      rgba(27, 22, 18, 0.015) 3px
+    );
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -30,28 +46,9 @@
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
-}
-
 body {
   margin: 0;
+  min-height: 100svh;
 }
 
 #root {
@@ -64,33 +61,41 @@ body {
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
+  background:
+    linear-gradient(90deg, rgba(143, 42, 34, 0.12) 0 3px, transparent 3px) left / 3px 100% no-repeat,
+    linear-gradient(90deg, transparent calc(100% - 3px), rgba(143, 42, 34, 0.12) 0) right / 3px 100%
+      no-repeat,
+    var(--paper);
+  box-shadow: var(--shadow);
 }
 
 h1,
 h2 {
   font-family: var(--heading);
-  font-weight: 500;
+  font-weight: 700;
   color: var(--text-h);
 }
 
 h1 {
   font-size: 56px;
-  letter-spacing: -1.68px;
+  letter-spacing: 0.04em;
   margin: 32px 0;
   @media (max-width: 1024px) {
     font-size: 36px;
     margin: 20px 0;
   }
 }
+
 h2 {
   font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
+  line-height: 130%;
+  letter-spacing: 0.03em;
   margin: 0 0 8px;
   @media (max-width: 1024px) {
     font-size: 20px;
   }
 }
+
 p {
   margin: 0;
 }
@@ -99,7 +104,7 @@ code,
 .counter {
   font-family: var(--mono);
   display: inline-flex;
-  border-radius: 4px;
+  border-radius: 2px;
   color: var(--text-h);
 }
 

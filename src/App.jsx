@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { isSupabaseConfigured, supabase } from './lib/supabase'
 import './App.css'
 
 function getGeminiErrorMessage(raw) {
@@ -101,25 +102,135 @@ function getKoreanAge(birthDate) {
   return age
 }
 
-function App() {
-  // 사용자가 입력한 이름
-  const [name, setName] = useState('')
-  // 생년월일 (date input 값, 예: 1990-01-01)
-  const [birthDate, setBirthDate] = useState('')
-  // 태어난 시간 (time input 값, 예: 14:30)
-  const [birthTime, setBirthTime] = useState('')
-  // 성별 (select 값: '' | 'male' | 'female')
-  const [gender, setGender] = useState('')
-  // 양력/음력 (select 값: 'solar' | 'lunar')
-  const [calendarType, setCalendarType] = useState('solar')
-  // Gemini가 돌려준 해석 결과 텍스트
-  const [result, setResult] = useState('')
-  // API 호출 중인지 여부
-  const [loading, setLoading] = useState(false)
-  // 에러 메시지
-  const [error, setError] = useState('')
+function toResultParagraphs(text) {
+  const raw = String(text ?? '').trim()
+  if (!raw) return []
 
-  // 사주 해석 요청 (버튼 클릭 시)
+  if (/\n/.test(raw)) {
+    return raw
+      .split(/\n+/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+  }
+
+  return raw
+    .split(/(?<=[.!?。！？])\s+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+}
+
+function genderLabel(value) {
+  if (value === 'male') return '남성'
+  if (value === 'female') return '여성'
+  return value || '-'
+}
+
+function calendarLabel(value) {
+  return value === 'lunar' ? '음력' : '양력'
+}
+
+function formatBirthDate(value) {
+  if (!value) return ''
+  const [y, m, d] = String(value).split('-')
+  if (!y || !m || !d) return value
+  return `${y}.${m}.${d}`
+}
+
+function App() {
+  const [name, setName] = useState('')
+  const [birthDate, setBirthDate] = useState('')
+  const [birthTime, setBirthTime] = useState('')
+  const [gender, setGender] = useState('')
+  const [calendarType, setCalendarType] = useState('solar')
+  const [result, setResult] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [readings, setReadings] = useState([])
+  const [selectedId, setSelectedId] = useState(null)
+  const [listError, setListError] = useState('')
+  const [listLoading, setListLoading] = useState(true)
+  const resultRef = useRef(null)
+  const formRef = useRef(null)
+  const nameInputRef = useRef(null)
+  const errorRef = useRef(null)
+
+  const filledCount = [name, birthDate, birthTime, gender].filter(Boolean).length
+  const formReady = filledCount === 4
+  const age = getKoreanAge(birthDate)
+
+  const scrollToResult = () => {
+    requestAnimationFrame(() => {
+      resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }
+
+  const loadReadings = async () => {
+    if (!isSupabaseConfigured || !supabase) {
+      setListError('Supabase 환경변수가 없습니다. .env 저장 후 dev 서버를 재시작하세요.')
+      setListLoading(false)
+      return
+    }
+
+    setListLoading(true)
+    const { data, error: fetchError } = await supabase
+      .from('saju_readings')
+      .select('id, name, birth_date, birth_time, gender, calendar_type, result, created_at')
+      .order('created_at', { ascending: false })
+
+    if (fetchError) {
+      console.error(fetchError)
+      setListError('저장된 목록을 불러오지 못했습니다.')
+      setListLoading(false)
+      return
+    }
+
+    setListError('')
+    setReadings(data ?? [])
+    setListLoading(false)
+  }
+
+  useEffect(() => {
+    loadReadings()
+  }, [])
+
+  useEffect(() => {
+    if (error) {
+      requestAnimationFrame(() => {
+        errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      })
+    }
+  }, [error])
+
+  const handleSelectReading = (reading) => {
+    setSelectedId(reading.id)
+    setName(reading.name)
+    setBirthDate(reading.birth_date)
+    setBirthTime(String(reading.birth_time).slice(0, 5))
+    setGender(reading.gender)
+    setCalendarType(reading.calendar_type)
+    setResult(reading.result)
+    setError('')
+    setLoading(false)
+    scrollToResult()
+  }
+
+  const handleNewReading = () => {
+    setSelectedId(null)
+    setName('')
+    setBirthDate('')
+    setBirthTime('')
+    setGender('')
+    setCalendarType('solar')
+    setResult('')
+    setError('')
+    setLoading(false)
+
+    requestAnimationFrame(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      nameInputRef.current?.focus()
+    })
+  }
+
   const handleAnalyze = async () => {
     if (!name || !birthDate || !birthTime || !gender) {
       setError('이름, 생년월일, 시간, 성별을 모두 입력해 주세요.')
@@ -129,15 +240,14 @@ function App() {
     setLoading(true)
     setError('')
     setResult('')
+    setSelectedId(null)
 
-    const age = getKoreanAge(birthDate)
-    const calendarLabel = calendarType === 'solar' ? '양력' : '음력'
+    const calendarText = calendarType === 'solar' ? '양력' : '음력'
 
-    // 사용자가 준 사주 기본차트해석 프롬프트 + 입력값
     const prompt = `
 return only Korean.
 
-당신은 세계 최고의 사주 해석 전문가다. 논리와 구조 중심으로 사주를 해석하며, 수천 명의 인생을 분석해 온 경험이 있다. 분석은 매우 냉정하고 직설적으로 진행되며, 감정에 휘둘리지 않는다. 그러나 의외로 인간 내면에 대한 깊은 통찰을 지니고 있고 장점과 단점을 냉정하게 말한다.
+당신은 세계 최고의 사주 해석 전문가다. 논리와 구조 중심으로 사주를 해석하며, 수천 명의 인생을 분석해 온 경험이 있다. 분석은 매우 냉정하고 직설적으로 진행되며, 감정에 휘둘리지 않는다. 그러나 동시에 인간 내면에 대한 깊은 통찰을 지니고 있고 장점과 단점을 냉정하게 말한다.
 
 질문: 사주를 통해 이 사람의 전반적인 성격, 기질, 재능을 분석해 주세요.
 사용자가 사주 용어에 익숙하지 않다고 가정하고, 쉽고 명확한 말로 설명하며 중요한 포인트에서는 핵심 사주 근거를 밝혀주세요.
@@ -153,7 +263,7 @@ return only Korean.
 이름: ${name}
 성별: ${gender}
 나이: 만 ${age}세
-생년월일: ${birthDate} (${calendarLabel})
+생년월일: ${birthDate} (${calendarText})
 태어난 시간: ${birthTime}
 
 ${DEMO_CHART}
@@ -162,7 +272,6 @@ return only Korean.
 `.trim()
 
     try {
-      // API 키는 서버에서만 사용 (로컬: Vite 프록시 / Netlify: Function)
       const res = await fetch('/api/gemini', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -176,115 +285,266 @@ return only Korean.
         throw new Error('API 응답이 JSON이 아닙니다. /api/gemini 배포와 GEMINI_API_KEY 설정을 확인하세요.')
       }
       if (!res.ok) throw new Error(data.error || '요청 실패')
-      setResult(data.text || '결과가 비어 있습니다.')
+
+      const text = data.text || '결과가 비어 있습니다.'
+      setResult(text)
+
+      if (!isSupabaseConfigured || !supabase) {
+        setError('해석은 완료됐지만 Supabase 환경변수가 없어 저장하지 못했습니다.')
+      } else {
+        const { data: saved, error: saveError } = await supabase
+          .from('saju_readings')
+          .insert({
+            name,
+            birth_date: birthDate,
+            birth_time: birthTime,
+            gender,
+            calendar_type: calendarType,
+            result: text,
+          })
+          .select('id, name, birth_date, birth_time, gender, calendar_type, result, created_at')
+          .single()
+
+        if (saveError) {
+          console.error(saveError)
+          setError('해석은 완료됐지만 저장에 실패했습니다.')
+        } else if (saved) {
+          setSelectedId(saved.id)
+          setReadings((prev) => [saved, ...prev])
+        }
+      }
     } catch (err) {
       console.error(err)
       setError(getGeminiErrorMessage(err.message || String(err)))
     } finally {
       setLoading(false)
+      setTimeout(scrollToResult, 50)
     }
   }
 
   return (
-    <main className="app">
-      <h1>사주 입력</h1>
+    <div className="layout">
+      <aside className="sidebar" aria-label="저장된 사주 목록">
+        <div className="sidebar-brand" aria-hidden="true">
+          <span className="sidebar-brand-mark">命</span>
+          <span className="sidebar-brand-text">사주명식</span>
+        </div>
 
-      <div className="form">
-        {/* 이름: value ↔ onChange 연결 */}
-        <label htmlFor="name">
-          이름
-          <input
-            id="name"
-            type="text"
-            placeholder="이름을 입력하세요"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </label>
-
-        {/* 생년월일 */}
-        <label htmlFor="birthDate">
-          생년월일
-          <input
-            id="birthDate"
-            type="date"
-            value={birthDate}
-            onChange={(e) => setBirthDate(e.target.value)}
-          />
-        </label>
-
-        {/* 태어난 시간 */}
-        <label htmlFor="birthTime">
-          태어난 시간
-          <input
-            id="birthTime"
-            type="time"
-            value={birthTime}
-            onChange={(e) => setBirthTime(e.target.value)}
-          />
-        </label>
-
-        {/* 성별 — 이름과 같은 패턴: value + onChange */}
-        <label htmlFor="gender">
-          성별
-          <select
-            id="gender"
-            value={gender}
-            onChange={(e) => setGender(e.target.value)}
-          >
-            <option value="">선택하세요</option>
-            <option value="male">남성</option>
-            <option value="female">여성</option>
-          </select>
-        </label>
-
-        {/* 양력/음력 — 이름과 같은 패턴: value + onChange */}
-        <label htmlFor="calendarType">
-          양력 / 음력
-          <select
-            id="calendarType"
-            value={calendarType}
-            onChange={(e) => setCalendarType(e.target.value)}
-          >
-            <option value="solar">양력</option>
-            <option value="lunar">음력</option>
-          </select>
-        </label>
-
-        <button type="button" onClick={handleAnalyze} disabled={loading}>
-          {loading ? '해석 중...' : '사주 해석하기'}
-        </button>
-      </div>
-
-      {/* 이름을 치면 아래 문구가 실시간으로 바뀜 */}
-      <p className="preview">{name || 'OOO'}님의 사주</p>
-
-      {error && <p className="error">{error}</p>}
-
-      {loading && (
-        <section className="result skeleton" aria-busy="true" aria-label="사주 해석 중">
-          <div className="skeleton-header">
-            <div className="skeleton-block skeleton-title" />
-            <span className="skeleton-badge">해석 중</span>
+        <div className="sidebar-head">
+          <div className="sidebar-title-row">
+            <h2 className="sidebar-title">저장된 사주</h2>
+            <span className="sidebar-count">{readings.length}</span>
           </div>
-          <div className="skeleton-body">
-            <div className="skeleton-block skeleton-line" />
-            <div className="skeleton-block skeleton-line" />
-            <div className="skeleton-block skeleton-line skeleton-line--medium" />
-            <div className="skeleton-block skeleton-line" />
-            <div className="skeleton-block skeleton-line skeleton-line--short" />
-          </div>
-          <p className="skeleton-caption">명식을 분석하고 있습니다…</p>
-        </section>
-      )}
+          <button type="button" className="sidebar-new" onClick={handleNewReading}>
+            새 사주 만들기
+          </button>
+        </div>
 
-      {result && !loading && (
-        <section className="result">
-          <h2>기본 차트 해석</h2>
-          <pre>{result}</pre>
-        </section>
-      )}
-    </main>
+        {listLoading && <p className="sidebar-empty">목록을 불러오는 중…</p>}
+        {!listLoading && listError && <p className="sidebar-empty">{listError}</p>}
+        {!listLoading && !listError && readings.length === 0 && (
+          <div className="sidebar-empty-box">
+            <p className="sidebar-empty">아직 기록된 사주가 없습니다.</p>
+            <p className="sidebar-empty-hint">오른쪽에서 새 사주를 해석하면 여기에 이름이 쌓입니다.</p>
+          </div>
+        )}
+
+        <ul className="sidebar-list">
+          {readings.map((reading) => (
+            <li key={reading.id}>
+              <button
+                type="button"
+                className={
+                  selectedId === reading.id
+                    ? 'sidebar-item sidebar-item--active'
+                    : 'sidebar-item'
+                }
+                onClick={() => handleSelectReading(reading)}
+              >
+                <span className="sidebar-item-name">{reading.name}</span>
+                <span className="sidebar-item-meta">
+                  {formatBirthDate(reading.birth_date)}
+                  {reading.birth_time ? ` · ${String(reading.birth_time).slice(0, 5)}` : ''}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </aside>
+
+      <main className="app">
+        <p className="brand-eyebrow">四柱 · 命理</p>
+
+        <div className="app-head">
+          <h1>사주 입력</h1>
+          <button type="button" className="new-reading-btn" onClick={handleNewReading}>
+            새 사주 만들기
+          </button>
+        </div>
+
+        <div className="form" ref={formRef}>
+          <div className="form-progress" aria-hidden="true">
+            <div className="form-progress-track">
+              <div
+                className="form-progress-fill"
+                style={{ width: `${(filledCount / 4) * 100}%` }}
+              />
+            </div>
+            <p className="form-progress-text">
+              {formReady ? '해석할 준비가 되었습니다' : `필수 정보 ${filledCount}/4`}
+            </p>
+          </div>
+
+          <label htmlFor="name">
+            이름
+            <input
+              id="name"
+              ref={nameInputRef}
+              type="text"
+              placeholder="이름을 입력하세요"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              autoComplete="name"
+            />
+          </label>
+
+          <div className="form-row">
+            <label htmlFor="birthDate">
+              생년월일
+              <input
+                id="birthDate"
+                type="date"
+                value={birthDate}
+                onChange={(e) => setBirthDate(e.target.value)}
+              />
+            </label>
+
+            <label htmlFor="birthTime">
+              태어난 시간
+              <input
+                id="birthTime"
+                type="time"
+                value={birthTime}
+                onChange={(e) => setBirthTime(e.target.value)}
+              />
+            </label>
+          </div>
+
+          <div className="form-row">
+            <label htmlFor="gender">
+              성별
+              <select
+                id="gender"
+                value={gender}
+                onChange={(e) => setGender(e.target.value)}
+              >
+                <option value="">선택하세요</option>
+                <option value="male">남성</option>
+                <option value="female">여성</option>
+              </select>
+            </label>
+
+            <label htmlFor="calendarType">
+              양력 / 음력
+              <select
+                id="calendarType"
+                value={calendarType}
+                onChange={(e) => setCalendarType(e.target.value)}
+              >
+                <option value="solar">양력</option>
+                <option value="lunar">음력</option>
+              </select>
+            </label>
+          </div>
+
+          <button type="button" onClick={handleAnalyze} disabled={loading}>
+            {loading ? '해석 중...' : '사주 해석하기'}
+          </button>
+        </div>
+
+        <div className={name ? 'preview preview--filled' : 'preview'}>
+          <p className="preview-kicker">名式</p>
+          <p className="preview-name">{name || 'OOO'}님의 사주</p>
+          {(birthDate || age != null) && (
+            <p className="preview-sub">
+              {birthDate && formatBirthDate(birthDate)}
+              {birthDate && birthTime ? ` · ${birthTime}` : ''}
+              {age != null ? ` · 만 ${age}세` : ''}
+              {` · ${calendarLabel(calendarType)}`}
+            </p>
+          )}
+        </div>
+
+        {error && (
+          <p className="error" ref={errorRef} role="alert">
+            {error}
+          </p>
+        )}
+
+        {loading && (
+          <section className="result skeleton" aria-busy="true" aria-label="사주 해석 중">
+            <div className="skeleton-header">
+              <div className="skeleton-block skeleton-title" />
+              <span className="skeleton-badge">해석 중</span>
+            </div>
+            <div className="skeleton-body">
+              <div className="skeleton-block skeleton-line" />
+              <div className="skeleton-block skeleton-line" />
+              <div className="skeleton-block skeleton-line skeleton-line--medium" />
+              <div className="skeleton-block skeleton-line" />
+              <div className="skeleton-block skeleton-line skeleton-line--short" />
+            </div>
+            <p className="skeleton-caption">명식을 살피고 기운을 읽는 중…</p>
+          </section>
+        )}
+
+        {result && !loading && (
+          <section
+            ref={resultRef}
+            className="result result--reveal"
+            key={selectedId ?? 'live'}
+            aria-label={`${name || '선택'} 사주 해석`}
+          >
+            <div className="result-header">
+              <div>
+                <p className="result-kicker">기본 차트 해석</p>
+                <h2>{name || 'OOO'}님의 사주</h2>
+              </div>
+              {selectedId != null && <span className="result-badge">저장됨</span>}
+            </div>
+
+            <dl className="result-meta">
+              <div>
+                <dt>생년월일</dt>
+                <dd>{birthDate ? formatBirthDate(birthDate) : '-'}</dd>
+              </div>
+              <div>
+                <dt>시간</dt>
+                <dd>{birthTime || '-'}</dd>
+              </div>
+              <div>
+                <dt>성별</dt>
+                <dd>{genderLabel(gender)}</dd>
+              </div>
+              <div>
+                <dt>달력</dt>
+                <dd>{calendarLabel(calendarType)}</dd>
+              </div>
+            </dl>
+
+            <div className="result-divider" aria-hidden="true">
+              <span>釋</span>
+            </div>
+
+            <div className="result-body">
+              {toResultParagraphs(result).map((paragraph, index) => (
+                <p key={`${selectedId ?? 'live'}-${index}`}>{paragraph}</p>
+              ))}
+            </div>
+          </section>
+        )}
+      </main>
+    </div>
   )
 }
 
