@@ -149,6 +149,7 @@ function App() {
   const [selectedId, setSelectedId] = useState(null)
   const [listError, setListError] = useState('')
   const [listLoading, setListLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const resultRef = useRef(null)
   const formRef = useRef(null)
   const nameInputRef = useRef(null)
@@ -224,11 +225,95 @@ function App() {
     setResult('')
     setError('')
     setLoading(false)
+    setSaving(false)
 
     requestAnimationFrame(() => {
       formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       nameInputRef.current?.focus()
     })
+  }
+
+  const buildReadingPayload = (resultText) => ({
+    name,
+    birth_date: birthDate,
+    birth_time: birthTime,
+    gender,
+    calendar_type: calendarType,
+    result: resultText,
+  })
+
+  const handleUpdate = async () => {
+    if (selectedId == null) {
+      setError('수정할 사주를 먼저 선택해 주세요.')
+      return
+    }
+    if (!name || !birthDate || !birthTime || !gender) {
+      setError('이름, 생년월일, 시간, 성별을 모두 입력해 주세요.')
+      return
+    }
+    if (!result) {
+      setError('저장할 해석 결과가 없습니다. 먼저 사주를 해석해 주세요.')
+      return
+    }
+    if (!isSupabaseConfigured || !supabase) {
+      setError('Supabase 환경변수가 없어 수정할 수 없습니다.')
+      return
+    }
+
+    setSaving(true)
+    setError('')
+
+    const { data: updated, error: updateError } = await supabase
+      .from('saju_readings')
+      .update(buildReadingPayload(result))
+      .eq('id', selectedId)
+      .select('id, name, birth_date, birth_time, gender, calendar_type, result, created_at')
+      .single()
+
+    setSaving(false)
+
+    if (updateError) {
+      console.error(updateError)
+      setError('사주 정보 수정에 실패했습니다.')
+      return
+    }
+
+    setReadings((prev) =>
+      prev.map((item) => (item.id === updated.id ? updated : item))
+    )
+  }
+
+  const handleDelete = async () => {
+    if (selectedId == null) {
+      setError('삭제할 사주를 먼저 선택해 주세요.')
+      return
+    }
+    if (!isSupabaseConfigured || !supabase) {
+      setError('Supabase 환경변수가 없어 삭제할 수 없습니다.')
+      return
+    }
+
+    const confirmed = window.confirm(`「${name || '선택'}」 사주를 삭제할까요?`)
+    if (!confirmed) return
+
+    setSaving(true)
+    setError('')
+
+    const { error: deleteError } = await supabase
+      .from('saju_readings')
+      .delete()
+      .eq('id', selectedId)
+
+    setSaving(false)
+
+    if (deleteError) {
+      console.error(deleteError)
+      setError('사주 삭제에 실패했습니다.')
+      return
+    }
+
+    setReadings((prev) => prev.filter((item) => item.id !== selectedId))
+    handleNewReading()
   }
 
   const handleAnalyze = async () => {
@@ -237,10 +322,10 @@ function App() {
       return
     }
 
+    const editingId = selectedId
     setLoading(true)
     setError('')
     setResult('')
-    setSelectedId(null)
 
     const calendarText = calendarType === 'solar' ? '양력' : '음력'
 
@@ -291,17 +376,27 @@ return only Korean.
 
       if (!isSupabaseConfigured || !supabase) {
         setError('해석은 완료됐지만 Supabase 환경변수가 없어 저장하지 못했습니다.')
+      } else if (editingId != null) {
+        const { data: updated, error: updateError } = await supabase
+          .from('saju_readings')
+          .update(buildReadingPayload(text))
+          .eq('id', editingId)
+          .select('id, name, birth_date, birth_time, gender, calendar_type, result, created_at')
+          .single()
+
+        if (updateError) {
+          console.error(updateError)
+          setError('해석은 완료됐지만 수정 저장에 실패했습니다.')
+        } else if (updated) {
+          setSelectedId(updated.id)
+          setReadings((prev) =>
+            prev.map((item) => (item.id === updated.id ? updated : item))
+          )
+        }
       } else {
         const { data: saved, error: saveError } = await supabase
           .from('saju_readings')
-          .insert({
-            name,
-            birth_date: birthDate,
-            birth_time: birthTime,
-            gender,
-            calendar_type: calendarType,
-            result: text,
-          })
+          .insert(buildReadingPayload(text))
           .select('id, name, birth_date, birth_time, gender, calendar_type, result, created_at')
           .single()
 
@@ -457,9 +552,34 @@ return only Korean.
             </label>
           </div>
 
-          <button type="button" onClick={handleAnalyze} disabled={loading}>
-            {loading ? '해석 중...' : '사주 해석하기'}
+          <button type="button" onClick={handleAnalyze} disabled={loading || saving}>
+            {loading
+              ? '해석 중...'
+              : selectedId != null
+                ? '다시 해석하고 수정'
+                : '사주 해석하기'}
           </button>
+
+          {selectedId != null && (
+            <div className="form-actions">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={handleUpdate}
+                disabled={loading || saving}
+              >
+                {saving ? '저장 중...' : '정보 수정 저장'}
+              </button>
+              <button
+                type="button"
+                className="btn-danger"
+                onClick={handleDelete}
+                disabled={loading || saving}
+              >
+                삭제
+              </button>
+            </div>
+          )}
         </div>
 
         <div className={name ? 'preview preview--filled' : 'preview'}>
@@ -541,6 +661,18 @@ return only Korean.
                 <p key={`${selectedId ?? 'live'}-${index}`}>{paragraph}</p>
               ))}
             </div>
+
+            {selectedId != null && (
+              <label className="result-edit" htmlFor="resultEdit">
+                해석 내용 수정
+                <textarea
+                  id="resultEdit"
+                  value={result}
+                  onChange={(e) => setResult(e.target.value)}
+                  rows={8}
+                />
+              </label>
+            )}
           </section>
         )}
       </main>
