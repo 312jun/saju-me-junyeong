@@ -23,13 +23,19 @@ function getGeminiErrorMessage(raw) {
   if (raw.includes('API key not valid') || raw.includes('API_KEY_INVALID') || raw.includes('401')) {
     return [
       'API 인증에 실패했습니다 (401).',
-      '1) Netlify → Site settings → Environment variables',
+      '1) Vercel/Netlify → Project Settings → Environment Variables',
       '2) Key: GEMINI_API_KEY / Value: AI Studio에서 발급한 키',
-      '3) Save 후 Deploys → Trigger deploy (재배포 필수)',
+      '3) Save 후 재배포 필수',
     ].join('\n')
   }
   if (raw.includes('GEMINI_API_KEY')) {
-    return 'API 키가 설정되지 않았습니다. Netlify → Site settings → Environment variables에 GEMINI_API_KEY를 추가하세요.'
+    return 'API 키가 설정되지 않았습니다. Vercel/Netlify Environment Variables에 GEMINI_API_KEY를 추가하세요.'
+  }
+  if (raw.includes('not valid JSON') || raw.includes('API 응답이 JSON이 아닙니다')) {
+    return [
+      'API 서버 응답이 올바르지 않습니다.',
+      'Vercel에 api/gemini 가 배포됐는지, GEMINI_API_KEY가 설정됐는지 확인 후 재배포하세요.',
+    ].join('\n')
   }
   return raw
 }
@@ -162,7 +168,13 @@ return only Korean.
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt }),
       })
-      const data = await res.json()
+      const rawBody = await res.text()
+      let data
+      try {
+        data = JSON.parse(rawBody)
+      } catch {
+        throw new Error('API 응답이 JSON이 아닙니다. /api/gemini 배포와 GEMINI_API_KEY 설정을 확인하세요.')
+      }
       if (!res.ok) throw new Error(data.error || '요청 실패')
       setResult(data.text || '결과가 비어 있습니다.')
     } catch (err) {
