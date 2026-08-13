@@ -2,29 +2,14 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
+import {
+  calendarLabel,
+  formatBirthDate,
+  formatBirthTime,
+  genderLabel,
+} from '../utils/format'
+import { trackClick } from '../utils/analytics'
 import '../App.css'
-
-function genderLabel(value) {
-  if (value === 'male') return '남성'
-  if (value === 'female') return '여성'
-  return value || '-'
-}
-
-function calendarLabel(value) {
-  return value === 'lunar' ? '음력' : '양력'
-}
-
-function formatBirthDate(value) {
-  if (!value) return ''
-  const [y, m, d] = String(value).split('-')
-  if (!y || !m || !d) return value
-  return `${y}.${m}.${d}`
-}
-
-function formatBirthTime(value) {
-  if (!value) return ''
-  return String(value).slice(0, 5)
-}
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -92,7 +77,11 @@ export default function SharedResultPage() {
   return (
     <div className="layout layout--shared">
       <header className="shared-topbar">
-        <Link to="/" className="shared-brand">
+        <Link
+          to="/"
+          className="shared-brand"
+          onClick={() => trackClick('shared_home', { location: 'shared_brand' })}
+        >
           <img
             src="/assets/character-img.PNG"
             alt=""
@@ -102,7 +91,11 @@ export default function SharedResultPage() {
           />
           <span>사주미</span>
         </Link>
-        <Link to="/" className="shared-home-link">
+        <Link
+          to="/"
+          className="shared-home-link"
+          onClick={() => trackClick('shared_home', { location: 'shared_topbar' })}
+        >
           내 사주도 보기
         </Link>
       </header>
@@ -127,7 +120,11 @@ export default function SharedResultPage() {
             <img src="/assets/character-img.PNG" alt="" width={88} height={88} />
             <h1>결과를 볼 수 없어요</h1>
             <p>{error}</p>
-            <Link to="/" className="shared-cta">
+            <Link
+              to="/"
+              className="shared-cta"
+              onClick={() => trackClick('shared_home', { location: 'shared_error_cta' })}
+            >
               사주미로 돌아가기
             </Link>
           </section>
